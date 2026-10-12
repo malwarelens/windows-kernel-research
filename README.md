@@ -1,19 +1,60 @@
-# Detection
+# Windows Kernel Research
 
-本目录收录与本仓库各漏洞分析配套的**检测思路与遥测说明**：行为特征、
-Sysmon / ETW / EDR 可观测点、以及误报注意事项。
+Root-cause analyses and detection notes for **publicly disclosed, already-patched**
+Windows kernel vulnerabilities, with verification-only proof-of-concept triggers.
 
-目前各 CVE 的检测要点先写在各自的 `analysis.md`「检测与缓解」一节中；
-当某个检测思路可复用到多个漏洞（例如 win32k 用户模式回调滥用的通用
-行为特征）时，再抽取到本目录形成独立条目。
+## Positioning
 
-## 计划中的条目
+This repository is a **defensive research** project:
 
-- `win32k-callback-abuse.md` — win32k 用户模式回调滥用的通用观测点：
-  进程改写自身 `PEB.KernelCallbackTable`、窗口创建过程中异常调用
-  `NtUserConsoleControl`、桌面堆布局异常、data-only 提权后的令牌异常等。
-- `token-anomalies.md` — data-only 提权（复制 SYSTEM 令牌类手法）在
-  进程遥测中的可见痕迹与 Sysmon 的能力边界。
+- **Root-cause analysis first.** Each entry explains *why* the bug happens, what
+  state the kernel got wrong, and how the vendor patch changes that logic.
+- **Detection-oriented.** Every analysis ships with a detection & mitigation
+  section: what a defender can observe (behavioral traits, Sysmon/ETW/EDR
+  telemetry) and what actually stops the bug class.
+- **Verification PoCs only.** PoC code in this repo exists solely to prove, on
+  your own test VM, that the vulnerable code path is reachable (expected
+  outcome: a bugcheck or an API anomaly on an unpatched build, nothing on a
+  patched build).
 
-> 状态：占位，后续补充。检测结论以各分析文档中标注的来源与实测为准，
-> 未实测的观测点会明确标注为「推测/待验证」。
+## Scope and hard rules
+
+- **Patched CVEs only.** No 0-days, no embargoed issues, nothing without a
+  vendor fix available.
+- **No weaponization.** No privilege-escalation payloads, no token stealing,
+  no mitigation bypasses (no KASLR/HVCI/CFG bypass helpers), no exploit
+  reliability work, no delivery mechanisms. If a write-up needs to mention an
+  exploitation primitive, it is described at the concept level only — the same
+  level already published by vendor and research-team analyses.
+- **Test VMs only.** Trigger code is written to be run in a disposable,
+  snapshotted virtual machine that you own. It may crash the machine by
+  design; that is the signal it is meant to produce.
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `analyses/<CVE-ID>/analysis.md` | Root-cause analysis, patch notes, trigger conditions, detection & mitigation |
+| `analyses/<CVE-ID>/poc/` | Verification-only trigger code + build/run notes |
+| `kernel-notes/` | Background notes on kernel subsystems (win32k, callbacks, desktop heap, …) |
+| `detection/` | Standalone detection ideas and telemetry notes (growing collection) |
+
+## Index
+
+| CVE | Component | Class | Entry |
+|---|---|---|---|
+| CVE-2021-1732 | win32kfull.sys (`xxxCreateWindowEx`) | Window-type / field-semantics confusion across a user-mode callback → OOB write in the kernel desktop heap (CWE-787) | [analysis](analyses/CVE-2021-1732/analysis.md) |
+
+Supporting notes:
+
+- [win32k user-mode callbacks](kernel-notes/win32k-user-callbacks.md) — why the
+  callback mechanism is a recurring source of kernel bugs.
+
+## Disclaimer
+
+All material is provided for security research and defensive purposes only,
+based exclusively on information that is already public (vendor advisories and
+published research). Running any code from this repository against systems you
+do not own or do not have explicit authorization to test may be illegal. The
+authors assume no liability for misuse or for damage caused by trigger code —
+use a snapshotted VM.
