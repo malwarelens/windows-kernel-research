@@ -44,6 +44,7 @@ This repository is a **defensive research** project:
 | CVE | Component | Class | Entry |
 |---|---|---|---|
 | CVE-2021-1732 | win32kfull.sys (`xxxCreateWindowEx`) | Window-type / field-semantics confusion across a user-mode callback → OOB write in the kernel desktop heap (CWE-787) | [analysis](analyses/CVE-2021-1732/analysis.md) |
+| CVE-2022-21882 | win32kfull.sys (kernel window procedures invoking `xxxClientAllocWindowClassExtraBytes`) | Same confusion reached via non-creation (message) paths — patch bypass of CVE-2021-1732 (CWE-787) | [analysis](analyses/CVE-2022-21882/analysis.md) |
 
 Supporting notes:
 
