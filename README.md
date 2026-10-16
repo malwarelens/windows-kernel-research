@@ -38,6 +38,19 @@ This repository is a **defensive research** project:
 | `analyses/<CVE-ID>/poc/` | Verification-only trigger code + build/run notes |
 | `kernel-notes/` | Background notes on kernel subsystems (win32k, callbacks, desktop heap, …) |
 | `detection/` | Standalone detection ideas and telemetry notes (growing collection) |
+| `scripts/` | Repository self-check tooling (see below) |
+
+## Repository self-check
+
+`scripts/check_consistency.py` (stdlib-only Python 3) verifies the
+invariants above: every `analyses/` entry is listed once in the index
+below, every analysis carries the standard sections and a matching
+CVE ID, every entry ships its PoC README + trigger source with a
+documented mingw-w64 build, and every relative Markdown link resolves.
+
+```bash
+python3 scripts/check_consistency.py   # exit 0 = consistent, 1 = drift found
+```
 
 ## Index
 
