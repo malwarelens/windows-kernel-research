@@ -13,11 +13,10 @@ Sysmon / ETW / EDR 可观测点、以及误报注意事项。
   回调滥用的通用观测点：进程改写自身 `PEB.KernelCallbackTable`、窗口创建
   过程中异常调用 `NtUserConsoleControl`、桌面堆布局异常、data-only 提权
   后的令牌异常等，并给出按行为链组合判定的建议。
+- [`token-anomalies.md`](token-anomalies.md) — data-only 提权在进程遥测
+  中的结果痕迹：已有进程令牌原地突变、低权限父进程创建 SYSTEM 子进程、
+  令牌与登录 / 服务记录互相矛盾等，并说明 Sysmon 只覆盖进程创建时刻、
+  不监控令牌变更的能力边界。
 
-## 计划中的条目
-
-- `token-anomalies.md` — data-only 提权（复制 SYSTEM 令牌类手法）在
-  进程遥测中的可见痕迹与 Sysmon 的能力边界。
-
-> 状态：`token-anomalies.md` 仍为占位，后续补充。检测结论以各分析文档中
-> 标注的来源与实测为准，未实测的观测点会明确标注为「推测/待验证」。
+> 检测结论以各分析文档中标注的来源与实测为准，未实测的观测点会
+> 明确标注为「推测/待验证」。
