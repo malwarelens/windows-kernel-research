@@ -15,6 +15,10 @@ analysis entry cannot silently drift from the layout:
    README documents a mingw-w64 build command for it.
 4. Every relative Markdown link in the repository resolves to an
    existing file or directory.
+5. Every ``detection/*.md`` entry (other than the directory's own
+   ``README.md``) is listed exactly once in the ``## 已有条目``
+   section of ``detection/README.md``, and that section lists no
+   entry that has no file.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -98,6 +102,36 @@ def check_readme_index(entry_dirs, errors):
             errors.append(f"README index: {cve} has no analyses/ directory")
 
 
+def check_detection_index(errors):
+    detection_dir = ROOT / "detection"
+    index_file = detection_dir / "README.md"
+    if not index_file.exists():
+        errors.append("detection index: missing detection/README.md")
+        return 0
+    entry_files = sorted(
+        p for p in detection_dir.glob("*.md") if p.name != "README.md"
+    )
+    text = index_file.read_text(encoding="utf-8")
+    sections = re.split(r"^## ", text, flags=re.M)
+    index_section = next(
+        (s for s in sections if s.startswith("已有条目")), None
+    )
+    if index_section is None:
+        errors.append("detection index: README.md missing '## 已有条目' section")
+        return len(entry_files)
+    indexed = re.findall(r"\]\(([A-Za-z0-9._-]+\.md)\)", index_section)
+    for entry_file in entry_files:
+        if indexed.count(entry_file.name) != 1:
+            errors.append(
+                f"detection index: {entry_file.name} listed "
+                f"{indexed.count(entry_file.name)} times (expected 1)"
+            )
+    for name in indexed:
+        if name not in {p.name for p in entry_files} and name != "README.md":
+            errors.append(f"detection index: {name} has no detection/ file")
+    return len(entry_files)
+
+
 def main():
     errors = []
     entry_dirs = sorted(p for p in (ROOT / "analyses").iterdir() if p.is_dir())
@@ -106,6 +140,7 @@ def main():
     for entry_dir in entry_dirs:
         check_analysis(entry_dir, errors)
     check_readme_index(entry_dirs, errors)
+    detection_count = check_detection_index(errors)
     check_links(sorted(ROOT.rglob("*.md")), errors)
 
     if errors:
@@ -114,8 +149,9 @@ def main():
             print(f"  - {error}")
         return 1
     print(
-        f"OK: {len(entry_dirs)} analyses, all standard sections, "
-        "PoC files, README index and Markdown links consistent."
+        f"OK: {len(entry_dirs)} analyses, {detection_count} detection entries, "
+        "all standard sections, PoC files, README indexes and Markdown "
+        "links consistent."
     )
     return 0
 
