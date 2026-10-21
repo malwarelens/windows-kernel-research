@@ -47,7 +47,9 @@ invariants above: every `analyses/` entry is listed once in the index
 below, every analysis carries the standard sections and a matching
 CVE ID, every entry ships its PoC README + trigger source with a
 documented mingw-w64 build, every `detection/` entry is listed once
-in that directory's index, and every relative Markdown link resolves.
+in that directory's index, every `kernel-notes/` entry is listed once
+in the supporting-notes list below, and every relative Markdown link
+resolves.
 
 ```bash
 python3 scripts/check_consistency.py   # exit 0 = consistent, 1 = drift found

@@ -19,6 +19,9 @@ analysis entry cannot silently drift from the layout:
    ``README.md``) is listed exactly once in the ``## 已有条目``
    section of ``detection/README.md``, and that section lists no
    entry that has no file.
+6. Every ``kernel-notes/*.md`` entry is listed exactly once in the
+   "Supporting notes" list of the README ``## Index`` section, and
+   that list names no entry that has no file.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -132,6 +135,40 @@ def check_detection_index(errors):
     return len(entry_files)
 
 
+def check_kernel_notes_index(errors):
+    notes_dir = ROOT / "kernel-notes"
+    if not notes_dir.is_dir():
+        errors.append("kernel-notes index: missing kernel-notes/ directory")
+        return 0
+    entry_files = sorted(notes_dir.glob("*.md"))
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    sections = re.split(r"^## ", readme, flags=re.M)
+    index_section = next((s for s in sections if s.startswith("Index")), None)
+    if index_section is None:
+        errors.append("kernel-notes index: README.md missing '## Index' section")
+        return len(entry_files)
+    notes_parts = index_section.split("Supporting notes:", 1)
+    if len(notes_parts) != 2:
+        errors.append(
+            "kernel-notes index: README.md '## Index' section has no "
+            "'Supporting notes:' list"
+        )
+        return len(entry_files)
+    indexed = re.findall(
+        r"\(kernel-notes/([A-Za-z0-9._-]+\.md)\)", notes_parts[1]
+    )
+    for entry_file in entry_files:
+        if indexed.count(entry_file.name) != 1:
+            errors.append(
+                f"kernel-notes index: {entry_file.name} listed "
+                f"{indexed.count(entry_file.name)} times (expected 1)"
+            )
+    for name in indexed:
+        if name not in {p.name for p in entry_files}:
+            errors.append(f"kernel-notes index: {name} has no kernel-notes/ file")
+    return len(entry_files)
+
+
 def main():
     errors = []
     entry_dirs = sorted(p for p in (ROOT / "analyses").iterdir() if p.is_dir())
@@ -141,6 +178,7 @@ def main():
         check_analysis(entry_dir, errors)
     check_readme_index(entry_dirs, errors)
     detection_count = check_detection_index(errors)
+    notes_count = check_kernel_notes_index(errors)
     check_links(sorted(ROOT.rglob("*.md")), errors)
 
     if errors:
@@ -150,8 +188,8 @@ def main():
         return 1
     print(
         f"OK: {len(entry_dirs)} analyses, {detection_count} detection entries, "
-        "all standard sections, PoC files, README indexes and Markdown "
-        "links consistent."
+        f"{notes_count} kernel notes, all standard sections, PoC files, "
+        "README indexes and Markdown links consistent."
     )
     return 0
 
