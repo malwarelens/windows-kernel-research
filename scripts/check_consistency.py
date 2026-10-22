@@ -11,8 +11,10 @@ analysis entry cannot silently drift from the layout:
    detection & mitigation, references) and a metadata table whose
    CVE ID matches its directory name.
 3. Every entry ships ``poc/README.md`` and ``poc/trigger.c``; the
-   trigger source names its CVE ID in its header comment and the PoC
-   README documents a mingw-w64 build command for it.
+   trigger source names its CVE ID in its header comment, the PoC
+   README documents a mingw-w64 build command for it, and the PoC
+   README carries the standard sections (what it does / does not do,
+   expected behaviour, build, run, risk notice).
 4. Every relative Markdown link in the repository resolves to an
    existing file or directory.
 5. Every ``detection/*.md`` entry (other than the directory's own
@@ -40,6 +42,14 @@ REQUIRED_SECTIONS = [
     "触发条件",
     "检测与缓解",
     "参考来源",
+]
+
+POC_REQUIRED_SECTIONS = [
+    "它做什么、不做什么",
+    "预期现象（仅限测试虚拟机）",
+    "编译",
+    "运行",
+    "风险提示",
 ]
 
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -89,6 +99,12 @@ def check_analysis(entry_dir, errors):
         readme = poc_readme.read_text(encoding="utf-8")
         if "trigger.c" not in readme or "mingw" not in readme:
             errors.append(f"{cve}: poc/README.md lacks a mingw build line")
+        poc_sections = SECTION_RE.findall(readme)
+        for required in POC_REQUIRED_SECTIONS:
+            if required not in poc_sections:
+                errors.append(
+                    f"{cve}: poc/README.md missing section '## {required}'"
+                )
 
 
 def check_readme_index(entry_dirs, errors):
