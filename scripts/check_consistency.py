@@ -24,6 +24,10 @@ analysis entry cannot silently drift from the layout:
 6. Every ``kernel-notes/*.md`` entry is listed exactly once in the
    "Supporting notes" list of the README ``## Index`` section, and
    that list names no entry that has no file.
+7. Every ``analysis.md`` cites at least one external (http/https)
+   link in its ``## 参考来源`` (references) section, backing the
+   repository's stance that all material is based on already-public
+   information.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -105,6 +109,26 @@ def check_analysis(entry_dir, errors):
                 errors.append(
                     f"{cve}: poc/README.md missing section '## {required}'"
                 )
+
+
+EXTERNAL_LINK_RE = re.compile(r"https?://", re.I)
+
+
+def check_reference_links(entry_dir, errors):
+    analysis = entry_dir / "analysis.md"
+    if not analysis.exists():
+        return
+    sections = re.split(
+        r"^## ", analysis.read_text(encoding="utf-8"), flags=re.M
+    )
+    ref_section = next(
+        (s for s in sections if s.startswith("参考来源")), None
+    )
+    if ref_section is None or not EXTERNAL_LINK_RE.search(ref_section):
+        errors.append(
+            f"{entry_dir.name}: analysis.md cites no external link in "
+            "'## 参考来源' (all material must be based on public information)"
+        )
 
 
 def check_readme_index(entry_dirs, errors):
@@ -192,6 +216,7 @@ def main():
         errors.append("no entries found under analyses/")
     for entry_dir in entry_dirs:
         check_analysis(entry_dir, errors)
+        check_reference_links(entry_dir, errors)
     check_readme_index(entry_dirs, errors)
     detection_count = check_detection_index(errors)
     notes_count = check_kernel_notes_index(errors)
@@ -205,7 +230,7 @@ def main():
     print(
         f"OK: {len(entry_dirs)} analyses, {detection_count} detection entries, "
         f"{notes_count} kernel notes, all standard sections, PoC files, "
-        "README indexes and Markdown links consistent."
+        "reference links, README indexes and Markdown links consistent."
     )
     return 0
 
