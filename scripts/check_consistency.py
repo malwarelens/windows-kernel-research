@@ -89,6 +89,15 @@ def check_analysis(entry_dir, errors):
     if cve not in text.split("## ", 1)[0]:
         errors.append(f"{cve}: CVE ID not named before the first section")
 
+    table_match = re.search(r"\|\s*漏洞编号\s*\|\s*(CVE-\d+-\d+)\s*\|", text)
+    if table_match is None:
+        errors.append(f"{cve}: metadata table lacks a '漏洞编号' row")
+    elif table_match.group(1) != cve:
+        errors.append(
+            f"{cve}: metadata table names {table_match.group(1)} "
+            f"(expected {cve})"
+        )
+
     poc_readme = entry_dir / "poc" / "README.md"
     trigger = entry_dir / "poc" / "trigger.c"
     if not poc_readme.exists():
@@ -229,8 +238,9 @@ def main():
         return 1
     print(
         f"OK: {len(entry_dirs)} analyses, {detection_count} detection entries, "
-        f"{notes_count} kernel notes, all standard sections, PoC files, "
-        "reference links, README indexes and Markdown links consistent."
+        f"{notes_count} kernel notes, all standard sections, metadata tables, "
+        "PoC files, reference links, README indexes and Markdown links "
+        "consistent."
     )
     return 0
 
