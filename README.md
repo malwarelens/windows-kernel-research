@@ -47,7 +47,8 @@ invariants above: every `analyses/` entry is listed once in the index
 below, every analysis carries the standard sections and a metadata
 table naming its own CVE ID, every analysis cites at least one
 external link in its references section, every entry ships its PoC
-README + trigger source with a documented mingw-w64 build and the
+README + trigger source with a documented mingw-w64 build command
+that names trigger.c and the
 standard PoC README sections
 (what it does / does not do, expected behaviour, build, run, risk
 notice), every `detection/` entry is listed once

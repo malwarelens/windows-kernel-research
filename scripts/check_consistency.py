@@ -12,9 +12,11 @@ analysis entry cannot silently drift from the layout:
    CVE ID matches its directory name.
 3. Every entry ships ``poc/README.md`` and ``poc/trigger.c``; the
    trigger source names its CVE ID in its header comment, the PoC
-   README documents a mingw-w64 build command for it, and the PoC
-   README carries the standard sections (what it does / does not do,
-   expected behaviour, build, run, risk notice).
+   README documents a mingw-w64 build command line that actually
+   compiles ``trigger.c`` (a mere prose mention of mingw is not
+   enough), and the PoC README carries the standard sections (what
+   it does / does not do, expected behaviour, build, run, risk
+   notice).
 4. Every relative Markdown link in the repository resolves to an
    existing file or directory.
 5. Every ``detection/*.md`` entry (other than the directory's own
@@ -110,8 +112,15 @@ def check_analysis(entry_dir, errors):
         errors.append(f"{cve}: trigger.c header does not name {cve}")
     if poc_readme.exists():
         readme = poc_readme.read_text(encoding="utf-8")
-        if "trigger.c" not in readme or "mingw" not in readme:
-            errors.append(f"{cve}: poc/README.md lacks a mingw build line")
+        has_build_command = any(
+            "mingw32-gcc" in line and "trigger.c" in line
+            for line in readme.splitlines()
+        )
+        if not has_build_command:
+            errors.append(
+                f"{cve}: poc/README.md lacks a mingw build command "
+                "for trigger.c"
+            )
         poc_sections = SECTION_RE.findall(readme)
         for required in POC_REQUIRED_SECTIONS:
             if required not in poc_sections:
@@ -239,8 +248,8 @@ def main():
     print(
         f"OK: {len(entry_dirs)} analyses, {detection_count} detection entries, "
         f"{notes_count} kernel notes, all standard sections, metadata tables, "
-        "PoC files, reference links, README indexes and Markdown links "
-        "consistent."
+        "PoC files and build commands, reference links, README indexes "
+        "and Markdown links consistent."
     )
     return 0
 
