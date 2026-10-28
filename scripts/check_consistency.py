@@ -30,6 +30,13 @@ analysis entry cannot silently drift from the layout:
    link in its ``## 参考来源`` (references) section, backing the
    repository's stance that all material is based on already-public
    information.
+8. Every ``analysis.md`` metadata table carries the standard rows
+   shared by all entries (vendor title, affected component, bug
+   class, severity, finder/reporter, in-the-wild status, fix date
+   and exploitation prerequisite), each with a non-empty value, so
+   a new entry cannot silently drop a field readers rely on. The
+   trailing relation row (e.g. "前篇" / "与前篇的关系") is
+   entry-specific and is deliberately not standardised here.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -48,6 +55,20 @@ REQUIRED_SECTIONS = [
     "触发条件",
     "检测与缓解",
     "参考来源",
+]
+
+# Standard metadata rows, in addition to the "漏洞编号" row checked
+# separately against the directory name below. Every published entry
+# carries all of these; only the trailing relation row varies.
+REQUIRED_METADATA_ROWS = [
+    "厂商标题",
+    "受影响组件",
+    "漏洞类型",
+    "严重程度",
+    "发现与报告",
+    "在野利用",
+    "修复时间",
+    "利用前提",
 ]
 
 POC_REQUIRED_SECTIONS = [
@@ -99,6 +120,16 @@ def check_analysis(entry_dir, errors):
             f"{cve}: metadata table names {table_match.group(1)} "
             f"(expected {cve})"
         )
+
+    preamble = text.split("## ", 1)[0]
+    for row in REQUIRED_METADATA_ROWS:
+        row_match = re.search(
+            r"\|\s*" + re.escape(row) + r"\s*\|\s*([^|]+?)\s*\|", preamble
+        )
+        if row_match is None:
+            errors.append(f"{cve}: metadata table lacks a '{row}' row")
+        elif not row_match.group(1).strip():
+            errors.append(f"{cve}: metadata table has an empty '{row}' row")
 
     poc_readme = entry_dir / "poc" / "README.md"
     trigger = entry_dir / "poc" / "trigger.c"
@@ -247,9 +278,9 @@ def main():
         return 1
     print(
         f"OK: {len(entry_dirs)} analyses, {detection_count} detection entries, "
-        f"{notes_count} kernel notes, all standard sections, metadata tables, "
-        "PoC files and build commands, reference links, README indexes "
-        "and Markdown links consistent."
+        f"{notes_count} kernel notes, all standard sections, standard "
+        "metadata rows, PoC files and build commands, reference links, "
+        "README indexes and Markdown links consistent."
     )
     return 0
 
