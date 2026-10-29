@@ -8,15 +8,15 @@ analysis entry cannot silently drift from the layout:
    README index, with a link to its ``analysis.md``.
 2. Every ``analysis.md`` carries the standard sections (affected
    versions, background, root cause, patch notes, trigger conditions,
-   detection & mitigation, references) and a metadata table whose
-   CVE ID matches its directory name.
+   detection & mitigation, references), each with non-empty content,
+   and a metadata table whose CVE ID matches its directory name.
 3. Every entry ships ``poc/README.md`` and ``poc/trigger.c``; the
    trigger source names its CVE ID in its header comment, the PoC
    README documents a mingw-w64 build command line that actually
    compiles ``trigger.c`` (a mere prose mention of mingw is not
    enough), and the PoC README carries the standard sections (what
    it does / does not do, expected behaviour, build, run, risk
-   notice).
+   notice), each with non-empty content.
 4. Every relative Markdown link in the repository resolves to an
    existing file or directory.
 5. Every ``detection/*.md`` entry (other than the directory's own
@@ -37,6 +37,10 @@ analysis entry cannot silently drift from the layout:
    a new entry cannot silently drop a field readers rely on. The
    trailing relation row (e.g. "前篇" / "与前篇的关系") is
    entry-specific and is deliberately not standardised here.
+9. Every standard section in ``analysis.md`` and ``poc/README.md``
+   (including the background section, whose title varies) carries
+   non-empty content, so a header-only entry cannot pass the
+   section-presence checks above.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -83,6 +87,23 @@ LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 SECTION_RE = re.compile(r"^## (.+)$", re.M)
 
 
+def section_bodies(text):
+    """Map each ``## `` heading to its stripped body text.
+
+    The body runs until the next ``## `` heading (or end of file);
+    a heading with nothing but whitespace after it maps to ``""``,
+    which is exactly the header-only case check 9 must catch.
+    """
+    bodies = {}
+    for part in re.split(r"^## ", text, flags=re.M)[1:]:
+        if "\n" in part:
+            title, body = part.split("\n", 1)
+        else:
+            title, body = part, ""
+        bodies[title.strip()] = body.strip()
+    return bodies
+
+
 def check_links(md_files, errors):
     for md in md_files:
         text = md.read_text(encoding="utf-8")
@@ -103,11 +124,19 @@ def check_analysis(entry_dir, errors):
     text = analysis.read_text(encoding="utf-8")
 
     sections = SECTION_RE.findall(text)
+    bodies = section_bodies(text)
     for required in REQUIRED_SECTIONS:
         if required not in sections:
             errors.append(f"{cve}: analysis.md missing section '## {required}'")
-    if not any(s.startswith("背景") for s in sections):
+        elif not bodies[required]:
+            errors.append(f"{cve}: analysis.md has an empty section '## {required}'")
+    background = [s for s in sections if s.startswith("背景")]
+    if not background:
         errors.append(f"{cve}: analysis.md missing a '## 背景…' section")
+    elif not bodies[background[0]]:
+        errors.append(
+            f"{cve}: analysis.md has an empty section '## {background[0]}'"
+        )
 
     if cve not in text.split("## ", 1)[0]:
         errors.append(f"{cve}: CVE ID not named before the first section")
@@ -153,10 +182,16 @@ def check_analysis(entry_dir, errors):
                 "for trigger.c"
             )
         poc_sections = SECTION_RE.findall(readme)
+        poc_bodies = section_bodies(readme)
         for required in POC_REQUIRED_SECTIONS:
             if required not in poc_sections:
                 errors.append(
                     f"{cve}: poc/README.md missing section '## {required}'"
+                )
+            elif not poc_bodies[required]:
+                errors.append(
+                    f"{cve}: poc/README.md has an empty section "
+                    f"'## {required}'"
                 )
 
 
@@ -278,9 +313,9 @@ def main():
         return 1
     print(
         f"OK: {len(entry_dirs)} analyses, {detection_count} detection entries, "
-        f"{notes_count} kernel notes, all standard sections, standard "
-        "metadata rows, PoC files and build commands, reference links, "
-        "README indexes and Markdown links consistent."
+        f"{notes_count} kernel notes, all standard sections (each with "
+        "content), standard metadata rows, PoC files and build commands, "
+        "reference links, README indexes and Markdown links consistent."
     )
     return 0
 
