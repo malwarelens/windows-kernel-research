@@ -56,7 +56,7 @@ standard PoC README sections
 notice), every `detection/` entry is listed once
 in that directory's index, every `kernel-notes/` entry is listed once
 in the supporting-notes list below, and every relative Markdown link
-resolves.
+resolves, and no Markdown file repeats a top-level heading.
 
 ```bash
 python3 scripts/check_consistency.py   # exit 0 = consistent, 1 = drift found

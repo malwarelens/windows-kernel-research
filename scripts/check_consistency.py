@@ -41,6 +41,10 @@ analysis entry cannot silently drift from the layout:
    (including the background section, whose title varies) carries
    non-empty content, so a header-only entry cannot pass the
    section-presence checks above.
+10. No Markdown file repeats a top-level (``## ``) heading: the
+    section-body map used by the checks above is keyed by heading,
+    so a duplicated heading would silently discard the first
+    section's body and let a broken document pass.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -293,6 +297,17 @@ def check_kernel_notes_index(errors):
     return len(entry_files)
 
 
+def check_duplicate_sections(md_files, errors):
+    for md in md_files:
+        sections = SECTION_RE.findall(md.read_text(encoding="utf-8"))
+        for title in sorted(set(sections)):
+            if sections.count(title) > 1:
+                errors.append(
+                    f"{md.relative_to(ROOT)}: duplicated top-level "
+                    f"section '## {title}' ({sections.count(title)} times)"
+                )
+
+
 def main():
     errors = []
     entry_dirs = sorted(p for p in (ROOT / "analyses").iterdir() if p.is_dir())
@@ -305,6 +320,7 @@ def main():
     detection_count = check_detection_index(errors)
     notes_count = check_kernel_notes_index(errors)
     check_links(sorted(ROOT.rglob("*.md")), errors)
+    check_duplicate_sections(sorted(ROOT.rglob("*.md")), errors)
 
     if errors:
         print(f"FAILED: {len(errors)} inconsistency(ies):")
@@ -315,7 +331,8 @@ def main():
         f"OK: {len(entry_dirs)} analyses, {detection_count} detection entries, "
         f"{notes_count} kernel notes, all standard sections (each with "
         "content), standard metadata rows, PoC files and build commands, "
-        "reference links, README indexes and Markdown links consistent."
+        "reference links, README indexes and Markdown links consistent, "
+        "no duplicated top-level headings."
     )
     return 0
 
