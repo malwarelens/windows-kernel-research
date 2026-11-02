@@ -5,7 +5,10 @@ Stdlib-only. Verifies the invariants the README promises, so a new
 analysis entry cannot silently drift from the layout:
 
 1. Every ``analyses/<CVE-ID>/`` directory is listed exactly once in the
-   README index, with a link to its ``analysis.md``.
+   README index, with a link to its ``analysis.md``, and the table
+   row carrying that link names the same CVE ID in its first cell:
+   a row labelled with one CVE but linking to another entry's
+   analysis would otherwise pass the exactly-once count check.
 2. Every ``analysis.md`` carries the standard sections (affected
    versions, background, root cause, patch notes, trigger conditions,
    detection & mitigation, references), each with non-empty content,
@@ -222,6 +225,16 @@ def check_reference_links(entry_dir, errors):
 def check_readme_index(entry_dirs, errors):
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     indexed = re.findall(r"\(analyses/(CVE-\d+-\d+)/analysis\.md\)", readme)
+    for row_cve, link_cve in re.findall(
+        r"^\|\s*(CVE-\d+-\d+)\s*\|.*\(analyses/(CVE-\d+-\d+)/analysis\.md\)",
+        readme,
+        flags=re.M,
+    ):
+        if row_cve != link_cve:
+            errors.append(
+                f"README index: table row names {row_cve} but links to "
+                f"{link_cve} analysis (row and link CVE must match)"
+            )
     for entry_dir in entry_dirs:
         if indexed.count(entry_dir.name) != 1:
             errors.append(
