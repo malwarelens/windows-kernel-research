@@ -51,7 +51,8 @@ table naming its own CVE ID with the standard metadata rows filled
 in, every analysis cites at least one
 external link in its references section, every entry ships its PoC
 README + trigger source with a documented mingw-w64 build command
-that names trigger.c and the
+that names trigger.c — run against trigger.c whenever that compiler
+is available — and the
 standard PoC README sections
 (what it does / does not do, expected behaviour, build, run, risk
 notice), every `detection/` entry is listed once

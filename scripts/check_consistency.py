@@ -48,13 +48,25 @@ analysis entry cannot silently drift from the layout:
     section-body map used by the checks above is keyed by heading,
     so a duplicated heading would silently discard the first
     section's body and let a broken document pass.
+11. When the mingw-w64 compiler named by a PoC README's build command
+    is available, that command is actually run against the entry's
+    ``trigger.c`` in a temporary directory: a command line that merely
+    names ``trigger.c`` would otherwise pass check 3 while a wrong
+    library flag or a broken source file silently broke the build.
+    When the compiler is not available (the Visual Studio build is
+    the documented alternative), the compile step is skipped rather
+    than failing the whole check.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
 """
 
 import re
+import shlex
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -202,6 +214,57 @@ def check_analysis(entry_dir, errors):
                 )
 
 
+def check_poc_compiles(entry_dir, errors):
+    """Run the PoC README's documented mingw build command, if possible.
+
+    Returns True only when a build was actually run and succeeded.
+    Missing PoC files or a missing build command are already reported
+    by ``check_analysis``; a missing compiler is a skip, not an error,
+    because the Visual Studio build is the documented alternative.
+    """
+    cve = entry_dir.name
+    poc_readme = entry_dir / "poc" / "README.md"
+    trigger = entry_dir / "poc" / "trigger.c"
+    if not poc_readme.exists() or not trigger.exists():
+        return False
+    build_lines = [
+        line.strip()
+        for line in poc_readme.read_text(encoding="utf-8").splitlines()
+        if "mingw32-gcc" in line and "trigger.c" in line
+    ]
+    if not build_lines:
+        return False
+    try:
+        args = shlex.split(build_lines[0])
+    except ValueError as exc:
+        errors.append(f"{cve}: mingw build command does not parse: {exc}")
+        return False
+    if not args or shutil.which(args[0]) is None:
+        return False
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shutil.copy(trigger, Path(tmpdir) / "trigger.c")
+            result = subprocess.run(
+                args,
+                cwd=tmpdir,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        errors.append(f"{cve}: mingw build failed to run: {exc}")
+        return False
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        detail = "; ".join(detail.splitlines()[-3:])
+        errors.append(
+            f"{cve}: documented mingw build command failed "
+            f"(exit {result.returncode}): {detail}"
+        )
+        return False
+    return True
+
+
 EXTERNAL_LINK_RE = re.compile(r"https?://", re.I)
 
 
@@ -326,9 +389,12 @@ def main():
     entry_dirs = sorted(p for p in (ROOT / "analyses").iterdir() if p.is_dir())
     if not entry_dirs:
         errors.append("no entries found under analyses/")
+    compiled = 0
     for entry_dir in entry_dirs:
         check_analysis(entry_dir, errors)
         check_reference_links(entry_dir, errors)
+        if check_poc_compiles(entry_dir, errors):
+            compiled += 1
     check_readme_index(entry_dirs, errors)
     detection_count = check_detection_index(errors)
     notes_count = check_kernel_notes_index(errors)
@@ -340,10 +406,18 @@ def main():
         for error in errors:
             print(f"  - {error}")
         return 1
+    if compiled == len(entry_dirs):
+        poc_build_note = f"{compiled} PoC build(s) compiled"
+    else:
+        poc_build_note = (
+            f"{compiled}/{len(entry_dirs)} PoC build(s) compiled "
+            "(mingw compiler not found for the rest, skipped)"
+        )
     print(
         f"OK: {len(entry_dirs)} analyses, {detection_count} detection entries, "
         f"{notes_count} kernel notes, all standard sections (each with "
         "content), standard metadata rows, PoC files and build commands, "
+        f"{poc_build_note}, "
         "reference links, README indexes and Markdown links consistent, "
         "no duplicated top-level headings."
     )
