@@ -56,6 +56,12 @@ analysis entry cannot silently drift from the layout:
     When the compiler is not available (the Visual Studio build is
     the documented alternative), the compile step is skipped rather
     than failing the whole check.
+12. The metadata table's severity row names a CVSS score and its fix
+    date row names a concrete calendar date (``YYYY 年 M 月 D 日``):
+    check 8 only requires those rows to be non-empty, so a severity
+    written as prose ("high") or a fix date written as a vague
+    month would otherwise pass while readers lose the two fields
+    they most often compare across entries.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -178,6 +184,27 @@ def check_analysis(entry_dir, errors):
             errors.append(f"{cve}: metadata table lacks a '{row}' row")
         elif not row_match.group(1).strip():
             errors.append(f"{cve}: metadata table has an empty '{row}' row")
+
+    def metadata_value(row):
+        match = re.search(
+            r"\|\s*" + re.escape(row) + r"\s*\|\s*([^|]+?)\s*\|", preamble
+        )
+        return match.group(1).strip() if match else None
+
+    severity = metadata_value("严重程度")
+    if severity is not None and not re.search(r"CVSS[^|]*\d+\.\d+", severity):
+        errors.append(
+            f"{cve}: metadata table '严重程度' row names no CVSS score "
+            f"(got: {severity[:60]})"
+        )
+    fix_date = metadata_value("修复时间")
+    if fix_date is not None and not re.search(
+        r"\d{4} 年 \d{1,2} 月 \d{1,2} 日", fix_date
+    ):
+        errors.append(
+            f"{cve}: metadata table '修复时间' row names no concrete "
+            f"date (got: {fix_date[:60]})"
+        )
 
     poc_readme = entry_dir / "poc" / "README.md"
     trigger = entry_dir / "poc" / "trigger.c"

@@ -48,7 +48,8 @@ below, in a table row naming the same CVE as the link it carries,
 every analysis carries the standard sections, each with
 content (not just a header), and a metadata
 table naming its own CVE ID with the standard metadata rows filled
-in, every analysis cites at least one
+in — the severity row naming a CVSS score and the fix-date row
+naming a concrete date — every analysis cites at least one
 external link in its references section, every entry ships its PoC
 README + trigger source with a documented mingw-w64 build command
 that names trigger.c — run against trigger.c whenever that compiler
