@@ -44,7 +44,8 @@ This repository is a **defensive research** project:
 
 `scripts/check_consistency.py` (stdlib-only Python 3) verifies the
 invariants above: every `analyses/` entry is listed once in the index
-below, in a table row naming the same CVE as the link it carries,
+below, in a table row naming the same CVE as the link it carries and
+the same CWE class(es) as the entry's metadata "漏洞类型" row,
 every analysis carries the standard sections, each with
 content (not just a header), and a metadata
 table naming its own CVE ID with the standard metadata rows filled

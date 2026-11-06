@@ -62,6 +62,13 @@ analysis entry cannot silently drift from the layout:
     written as prose ("high") or a fix date written as a vague
     month would otherwise pass while readers lose the two fields
     they most often compare across entries.
+13. The CWE class(es) named in a README index row match the CWE(s)
+    in that entry's metadata "漏洞类型" row: the index is the
+    first thing a reader scans, so a row claiming CWE-416 while the
+    analysis says CWE-787 (or a dual-portrait entry dropping one
+    side) would mislead before the reader ever opens the analysis.
+    Both sides must name at least one CWE and the two sets must be
+    equal.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -336,6 +343,60 @@ def check_readme_index(entry_dirs, errors):
             errors.append(f"README index: {cve} has no analyses/ directory")
 
 
+CWE_RE = re.compile(r"CWE-(\d+)")
+
+
+def check_readme_cwe_matches_metadata(entry_dirs, errors):
+    """README index CWE class(es) must match the metadata 漏洞类型 row.
+
+    The index row is what a reader scans first; the metadata row is
+    what the analysis itself asserts. Both must name at least one CWE
+    and the two sets must be equal, so a dual-portrait entry
+    (e.g. CWE-122 / CWE-787) cannot silently drop one side in
+    either place.
+    """
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    index_cwes = {}
+    for row_cve, row_text in re.findall(
+        r"^\|\s*(CVE-\d+-\d+)\s*\|(.*)$", readme, flags=re.M
+    ):
+        if "analyses/" in row_text:
+            index_cwes[row_cve] = set(CWE_RE.findall(row_text))
+    for entry_dir in entry_dirs:
+        cve = entry_dir.name
+        analysis = entry_dir / "analysis.md"
+        if not analysis.exists():
+            continue
+        preamble = analysis.read_text(encoding="utf-8").split("## ", 1)[0]
+        row_match = re.search(
+            r"\|\s*漏洞类型\s*\|\s*([^|]+?)\s*\|", preamble
+        )
+        if row_match is None:
+            errors.append(f"{cve}: metadata table lacks a '漏洞类型' row")
+            continue
+        metadata_cwes = set(CWE_RE.findall(row_match.group(1)))
+        index_set = index_cwes.get(cve)
+        if index_set is None:
+            errors.append(f"{cve}: README index has no row naming {cve}")
+            continue
+        if not index_set:
+            errors.append(
+                f"{cve}: README index row names no CWE class "
+                "(index must carry the entry's CWE class)"
+            )
+        elif not metadata_cwes:
+            errors.append(
+                f"{cve}: metadata '漏洞类型' row names no CWE class "
+                "(analysis must state its CWE class)"
+            )
+        elif index_set != metadata_cwes:
+            errors.append(
+                f"{cve}: README index CWE class(es) "
+                f"{sorted(index_set)} do not match metadata "
+                f"'漏洞类型' CWE class(es) {sorted(metadata_cwes)}"
+            )
+
+
 def check_detection_index(errors):
     detection_dir = ROOT / "detection"
     index_file = detection_dir / "README.md"
@@ -423,6 +484,7 @@ def main():
         if check_poc_compiles(entry_dir, errors):
             compiled += 1
     check_readme_index(entry_dirs, errors)
+    check_readme_cwe_matches_metadata(entry_dirs, errors)
     detection_count = check_detection_index(errors)
     notes_count = check_kernel_notes_index(errors)
     check_links(sorted(ROOT.rglob("*.md")), errors)
@@ -445,7 +507,8 @@ def main():
         f"{notes_count} kernel notes, all standard sections (each with "
         "content), standard metadata rows, PoC files and build commands, "
         f"{poc_build_note}, "
-        "reference links, README indexes and Markdown links consistent, "
+        "reference links, README indexes (including CWE classes) and "
+        "Markdown links consistent, "
         "no duplicated top-level headings."
     )
     return 0
