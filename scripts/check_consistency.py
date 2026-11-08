@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repository consistency self-check for windows-kernel-research.
+r"""Repository consistency self-check for windows-kernel-research.
 
 Stdlib-only. Verifies the invariants the README promises, so a new
 analysis entry cannot silently drift from the layout:
@@ -69,6 +69,12 @@ analysis entry cannot silently drift from the layout:
     side) would mislead before the reader ever opens the analysis.
     Both sides must name at least one CWE and the two sets must be
     equal.
+14. The CVSS score named by the metadata severity row is a real
+    score in the 0.0-10.0 range, and the fix date is a real calendar
+    date: check 12's patterns would otherwise accept a severity
+    that only repeats the "CVSS 3.1" version token (the version
+    number itself matches ``\d+\.\d+``) or a date such as
+    2023 年 2 月 30 日.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -80,6 +86,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -199,19 +206,48 @@ def check_analysis(entry_dir, errors):
         return match.group(1).strip() if match else None
 
     severity = metadata_value("严重程度")
-    if severity is not None and not re.search(r"CVSS[^|]*\d+\.\d+", severity):
-        errors.append(
-            f"{cve}: metadata table '严重程度' row names no CVSS score "
-            f"(got: {severity[:60]})"
+    if severity is not None:
+        # Check 14: the "CVSS 3.1" version token itself matches
+        # ``\d+\.\d+``, so it must not count as the score. Strip
+        # every version token first, then require a decimal score
+        # in the 0.0-10.0 range.
+        without_versions = re.sub(
+            r"CVSS:?\s*v?\d+\.\d+", "", severity
         )
+        scores = [
+            float(s)
+            for s in re.findall(r"\d+\.\d+", without_versions)
+        ]
+        if not any(0.0 <= score <= 10.0 for score in scores):
+            errors.append(
+                f"{cve}: metadata table '严重程度' row names no CVSS "
+                "score in 0.0-10.0 after the CVSS version "
+                f"(got: {severity[:60]})"
+            )
     fix_date = metadata_value("修复时间")
-    if fix_date is not None and not re.search(
-        r"\d{4} 年 \d{1,2} 月 \d{1,2} 日", fix_date
-    ):
-        errors.append(
-            f"{cve}: metadata table '修复时间' row names no concrete "
-            f"date (got: {fix_date[:60]})"
+    if fix_date is not None:
+        date_match = re.search(
+            r"(\d{4}) 年 (\d{1,2}) 月 (\d{1,2}) 日", fix_date
         )
+        if date_match is None:
+            errors.append(
+                f"{cve}: metadata table '修复时间' row names no concrete "
+                f"date (got: {fix_date[:60]})"
+            )
+        else:
+            # Check 14: the pattern above also matches impossible
+            # dates such as 2023 年 2 月 30 日; the date must exist.
+            year, month, day = (
+                int(group) for group in date_match.groups()
+            )
+            try:
+                date(year, month, day)
+            except ValueError:
+                errors.append(
+                    f"{cve}: metadata table '修复时间' row names an "
+                    "impossible calendar date "
+                    f"(got: {fix_date[:60]})"
+                )
 
     poc_readme = entry_dir / "poc" / "README.md"
     trigger = entry_dir / "poc" / "trigger.c"

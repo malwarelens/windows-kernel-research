@@ -49,8 +49,9 @@ the same CWE class(es) as the entry's metadata "漏洞类型" row,
 every analysis carries the standard sections, each with
 content (not just a header), and a metadata
 table naming its own CVE ID with the standard metadata rows filled
-in — the severity row naming a CVSS score and the fix-date row
-naming a concrete date — every analysis cites at least one
+in — the severity row naming a CVSS score in the 0.0–10.0 range (the
+"CVSS 3.1" version token alone does not count) and the fix-date row
+naming a real calendar date — every analysis cites at least one
 external link in its references section, every entry ships its PoC
 README + trigger source with a documented mingw-w64 build command
 that names trigger.c — run against trigger.c whenever that compiler
