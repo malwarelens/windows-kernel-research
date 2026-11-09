@@ -75,6 +75,14 @@ analysis entry cannot silently drift from the layout:
     that only repeats the "CVSS 3.1" version token (the version
     number itself matches ``\d+\.\d+``) or a date such as
     2023 年 2 月 30 日.
+15. The driver filename (``*.sys``) named by a README index row's
+    Component cell appears in that entry's metadata "受影响组件"
+    row: the index is the first thing a reader scans, so a row
+    claiming clfs.sys while the analysis says win32kfull.sys would
+    mislead before the reader ever opens the analysis. Both sides
+    name the driver in free prose, so only the ``.sys`` filename(s)
+    are compared, case-insensitively, and every driver the index
+    claims must be asserted by the analysis.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -433,6 +441,70 @@ def check_readme_cwe_matches_metadata(entry_dirs, errors):
             )
 
 
+SYS_RE = re.compile(r"[A-Za-z0-9_.-]+\.sys", re.I)
+
+
+def check_readme_component_matches_metadata(entry_dirs, errors):
+    """README index Component cell must name the entry's driver.
+
+    The index Component column is what a reader scans first; the
+    metadata "受影响组件" row is what the analysis itself asserts.
+    Both sides name the driver in free prose, so only the ``.sys``
+    filename(s) are compared, case-insensitively: every driver the
+    index claims must be asserted by the analysis, so a row
+    claiming clfs.sys while the analysis says win32kfull.sys
+    cannot slip in.
+    """
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    index_drivers = {}
+    for row_cve, row_text in re.findall(
+        r"^\|\s*(CVE-\d+-\d+)\s*\|(.*)$", readme, flags=re.M
+    ):
+        if "analyses/" in row_text:
+            cells = row_text.split("|")
+            if cells:
+                index_drivers[row_cve] = set(
+                    token.lower() for token in SYS_RE.findall(cells[0])
+                )
+    for entry_dir in entry_dirs:
+        cve = entry_dir.name
+        index_set = index_drivers.get(cve)
+        if index_set is None:
+            # Missing index row is already reported by check 13.
+            continue
+        analysis = entry_dir / "analysis.md"
+        if not analysis.exists():
+            continue
+        preamble = analysis.read_text(encoding="utf-8").split("## ", 1)[0]
+        row_match = re.search(
+            r"\|\s*受影响组件\s*\|\s*([^|]+?)\s*\|", preamble
+        )
+        if row_match is None:
+            # Missing metadata row is already reported by check 8.
+            continue
+        metadata_drivers = set(
+            token.lower()
+            for token in SYS_RE.findall(row_match.group(1))
+        )
+        if not index_set:
+            errors.append(
+                f"{cve}: README index Component cell names no driver "
+                "file (.sys) (index must carry the entry's driver)"
+            )
+        elif not metadata_drivers:
+            errors.append(
+                f"{cve}: metadata '受影响组件' row names no driver "
+                "file (.sys) (analysis must state its driver)"
+            )
+        elif not index_set <= metadata_drivers:
+            errors.append(
+                f"{cve}: README index driver file(s) "
+                f"{sorted(index_set - metadata_drivers)} do not appear "
+                "in metadata '受影响组件' row "
+                f"(metadata names {sorted(metadata_drivers)})"
+            )
+
+
 def check_detection_index(errors):
     detection_dir = ROOT / "detection"
     index_file = detection_dir / "README.md"
@@ -521,6 +593,7 @@ def main():
             compiled += 1
     check_readme_index(entry_dirs, errors)
     check_readme_cwe_matches_metadata(entry_dirs, errors)
+    check_readme_component_matches_metadata(entry_dirs, errors)
     detection_count = check_detection_index(errors)
     notes_count = check_kernel_notes_index(errors)
     check_links(sorted(ROOT.rglob("*.md")), errors)
