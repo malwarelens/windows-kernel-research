@@ -53,7 +53,8 @@ table naming its own CVE ID with the standard metadata rows filled
 in — the severity row naming a CVSS score in the 0.0–10.0 range (the
 "CVSS 3.1" version token alone does not count) and the fix-date row
 naming a real calendar date — every analysis cites at least one
-external link in its references section, every entry ships its PoC
+external link in its references section, anchored to both the vendor
+advisory (microsoft.com) and the NVD entry (nvd.nist.gov), every entry ships its PoC
 README + trigger source with a documented mingw-w64 build command
 that names trigger.c — run against trigger.c whenever that compiler
 is available — and the

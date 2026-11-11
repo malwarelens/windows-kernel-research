@@ -83,6 +83,12 @@ analysis entry cannot silently drift from the layout:
     name the driver in free prose, so only the ``.sys`` filename(s)
     are compared, case-insensitively, and every driver the index
     claims must be asserted by the analysis.
+16. The ``## 参考来源`` (references) section of every analysis
+    anchors to both the vendor advisory (a microsoft.com link)
+    and the NVD entry (an nvd.nist.gov link): check 7 only
+    requires one external link anywhere in the section, so an
+    entry could otherwise pass while citing neither of the two
+    sources every patched-CVE write-up in this repo is built on.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -363,6 +369,52 @@ def check_reference_links(entry_dir, errors):
         )
 
 
+def check_reference_anchors(entry_dir, errors):
+    """References must anchor to the vendor advisory and the NVD entry.
+
+    Check 7 only requires one external link anywhere in the
+    references section, so an entry could pass while citing neither
+    the vendor's own advisory nor the NVD record — the two sources
+    every patched-CVE write-up in this repo is built on. Both must
+    appear in ``## 参考来源``. A missing references section is
+    already reported by ``check_reference_links`` and is not
+    double-reported here.
+    """
+    analysis = entry_dir / "analysis.md"
+    if not analysis.exists():
+        return
+    sections = re.split(
+        r"^## ", analysis.read_text(encoding="utf-8"), flags=re.M
+    )
+    ref_section = next(
+        (s for s in sections if s.startswith("参考来源")), None
+    )
+    if ref_section is None:
+        return
+    hosts = {
+        host.lower()
+        for host in re.findall(r"https?://([^/\s)]+)", ref_section, flags=re.I)
+    }
+
+    def has_domain(hosts, domain):
+        return any(
+            host == domain or host.endswith("." + domain) for host in hosts
+        )
+
+    if not has_domain(hosts, "microsoft.com"):
+        errors.append(
+            f"{entry_dir.name}: analysis.md cites no vendor advisory "
+            "(microsoft.com) in '## 参考来源' (every entry must anchor "
+            "to the vendor's own advisory)"
+        )
+    if not has_domain(hosts, "nvd.nist.gov"):
+        errors.append(
+            f"{entry_dir.name}: analysis.md cites no NVD entry "
+            "(nvd.nist.gov) in '## 参考来源' (every entry must anchor "
+            "to the NVD record)"
+        )
+
+
 def check_readme_index(entry_dirs, errors):
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     indexed = re.findall(r"\(analyses/(CVE-\d+-\d+)/analysis\.md\)", readme)
@@ -589,6 +641,7 @@ def main():
     for entry_dir in entry_dirs:
         check_analysis(entry_dir, errors)
         check_reference_links(entry_dir, errors)
+        check_reference_anchors(entry_dir, errors)
         if check_poc_compiles(entry_dir, errors):
             compiled += 1
     check_readme_index(entry_dirs, errors)
@@ -616,7 +669,8 @@ def main():
         f"{notes_count} kernel notes, all standard sections (each with "
         "content), standard metadata rows, PoC files and build commands, "
         f"{poc_build_note}, "
-        "reference links, README indexes (including CWE classes) and "
+        "reference links anchored to the vendor advisory and the NVD "
+        "entry, README indexes (including CWE classes) and "
         "Markdown links consistent, "
         "no duplicated top-level headings."
     )
