@@ -89,6 +89,12 @@ analysis entry cannot silently drift from the layout:
     requires one external link anywhere in the section, so an
     entry could otherwise pass while citing neither of the two
     sources every patched-CVE write-up in this repo is built on.
+17. The vendor-advisory and NVD links that anchor an entry's
+    references actually name that entry's own CVE ID (case-
+    insensitive): check 16 only verifies the domains, so a link
+    to the vendor or NVD homepage — or to another CVE's record —
+    would otherwise pass while the entry cites no advisory or
+    record for the vulnerability it describes.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -415,6 +421,56 @@ def check_reference_anchors(entry_dir, errors):
         )
 
 
+def check_reference_anchors_name_cve(entry_dir, errors):
+    """Vendor and NVD anchors must name the entry's own CVE ID.
+
+    Check 16 only verifies the domains, so a link to the vendor
+    or NVD homepage — or to another CVE's advisory or record —
+    would pass while the entry cites no source for the
+    vulnerability it describes. At least one microsoft.com link
+    and at least one nvd.nist.gov link in ``## 参考来源`` must
+    carry the entry's own CVE ID (case-insensitive: MSRC and NVD
+    URLs spell the ID in either case). A domain that is absent
+    altogether is already reported by check 16 and is not
+    double-reported here.
+    """
+    cve = entry_dir.name
+    analysis = entry_dir / "analysis.md"
+    if not analysis.exists():
+        return
+    sections = re.split(
+        r"^## ", analysis.read_text(encoding="utf-8"), flags=re.M
+    )
+    ref_section = next(
+        (s for s in sections if s.startswith("参考来源")), None
+    )
+    if ref_section is None:
+        return
+    urls = re.findall(
+        r"https?://([^/\s)]+)([^)\s]*)", ref_section, flags=re.I
+    )
+    cve_lower = cve.lower()
+    for domain, label in (
+        ("microsoft.com", "vendor advisory"),
+        ("nvd.nist.gov", "NVD entry"),
+    ):
+        domain_urls = [
+            host + path
+            for host, path in urls
+            if host.lower() == domain
+            or host.lower().endswith("." + domain)
+        ]
+        if not domain_urls:
+            continue
+        if not any(cve_lower in url.lower() for url in domain_urls):
+            errors.append(
+                f"{cve}: analysis.md cites no {label} for {cve} in "
+                "'## 参考来源' (its "
+                f"{domain} link(s) name no CVE ID of this entry: "
+                f"{domain_urls[0][:60]})"
+            )
+
+
 def check_readme_index(entry_dirs, errors):
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     indexed = re.findall(r"\(analyses/(CVE-\d+-\d+)/analysis\.md\)", readme)
@@ -642,6 +698,7 @@ def main():
         check_analysis(entry_dir, errors)
         check_reference_links(entry_dir, errors)
         check_reference_anchors(entry_dir, errors)
+        check_reference_anchors_name_cve(entry_dir, errors)
         if check_poc_compiles(entry_dir, errors):
             compiled += 1
     check_readme_index(entry_dirs, errors)
@@ -670,7 +727,7 @@ def main():
         "content), standard metadata rows, PoC files and build commands, "
         f"{poc_build_note}, "
         "reference links anchored to the vendor advisory and the NVD "
-        "entry, README indexes (including CWE classes) and "
+        "entry for the entry's own CVE, README indexes (including CWE classes) and "
         "Markdown links consistent, "
         "no duplicated top-level headings."
     )
