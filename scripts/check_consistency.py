@@ -95,6 +95,13 @@ analysis entry cannot silently drift from the layout:
     to the vendor or NVD homepage — or to another CVE's record —
     would otherwise pass while the entry cites no advisory or
     record for the vulnerability it describes.
+18. The PoC README names its own CVE ID: check 3 verifies the
+    trigger source header and the build command, so a PoC README
+    copied from another entry would otherwise pass every section
+    check while describing the wrong vulnerability. (A PoC README
+    may legitimately also name a predecessor CVE — CVE-2022-21882
+    cites CVE-2021-1732 as the bug it bypasses — so only the own
+    ID is required, not the absence of others.)
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -281,6 +288,14 @@ def check_analysis(entry_dir, errors):
         errors.append(f"{cve}: trigger.c header does not name {cve}")
     if poc_readme.exists():
         readme = poc_readme.read_text(encoding="utf-8")
+        # Check 18: the PoC README must name its own CVE ID, so a
+        # README copied from another entry cannot pass while
+        # describing the wrong vulnerability.
+        if cve not in readme:
+            errors.append(
+                f"{cve}: poc/README.md does not name {cve} "
+                "(PoC README must describe its own entry)"
+            )
         has_build_command = any(
             "mingw32-gcc" in line and "trigger.c" in line
             for line in readme.splitlines()
