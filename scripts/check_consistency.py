@@ -102,6 +102,14 @@ analysis entry cannot silently drift from the layout:
     may legitimately also name a predecessor CVE — CVE-2022-21882
     cites CVE-2021-1732 as the bug it bypasses — so only the own
     ID is required, not the absence of others.)
+19. Every ``detection/*.md`` entry (other than the directory's own
+    ``README.md``) links to at least one published analysis: the
+    detection directory's README describes its entries as
+    detection notes accompanying this repository's vulnerability
+    analyses, so an entry naming no analysis would be generic
+    advice disconnected from the repo. Only links to existing
+    entries count; a link to an analysis that does not exist is
+    already caught by check 4.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -658,6 +666,35 @@ def check_detection_index(errors):
     return len(entry_files)
 
 
+def check_detection_entries_anchor_to_analysis(entry_dirs, errors):
+    """Detection entries must anchor to at least one published analysis.
+
+    The detection directory's README describes its entries as
+    detection notes accompanying this repository's vulnerability
+    analyses, so an entry that links to no analysis at all would be
+    generic advice disconnected from the repo. Only links to
+    existing ``analyses/<CVE-ID>/analysis.md`` entries count; a
+    link to a missing analysis is already reported by check 4.
+    """
+    detection_dir = ROOT / "detection"
+    if not detection_dir.is_dir():
+        return
+    published = {d.name for d in entry_dirs}
+    for entry_file in sorted(
+        p for p in detection_dir.glob("*.md") if p.name != "README.md"
+    ):
+        text = entry_file.read_text(encoding="utf-8")
+        linked = set(
+            re.findall(r"analyses/(CVE-\d+-\d+)/analysis\.md", text)
+        )
+        if not (linked & published):
+            errors.append(
+                f"detection/{entry_file.name}: links to no published "
+                "analysis (detection entries must anchor to at least "
+                "one analyses/<CVE-ID>/analysis.md)"
+            )
+
+
 def check_kernel_notes_index(errors):
     notes_dir = ROOT / "kernel-notes"
     if not notes_dir.is_dir():
@@ -720,6 +757,7 @@ def main():
     check_readme_cwe_matches_metadata(entry_dirs, errors)
     check_readme_component_matches_metadata(entry_dirs, errors)
     detection_count = check_detection_index(errors)
+    check_detection_entries_anchor_to_analysis(entry_dirs, errors)
     notes_count = check_kernel_notes_index(errors)
     check_links(sorted(ROOT.rglob("*.md")), errors)
     check_duplicate_sections(sorted(ROOT.rglob("*.md")), errors)
@@ -742,7 +780,8 @@ def main():
         "content), standard metadata rows, PoC files and build commands, "
         f"{poc_build_note}, "
         "reference links anchored to the vendor advisory and the NVD "
-        "entry for the entry's own CVE, README indexes (including CWE classes) and "
+        "entry for the entry's own CVE, detection entries anchored "
+        "to a published analysis, README indexes (including CWE classes) and "
         "Markdown links consistent, "
         "no duplicated top-level headings."
     )
