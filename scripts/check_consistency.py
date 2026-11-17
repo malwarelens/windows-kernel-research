@@ -110,6 +110,14 @@ analysis entry cannot silently drift from the layout:
     advice disconnected from the repo. Only links to existing
     entries count; a link to an analysis that does not exist is
     already caught by check 4.
+20. Every ``analysis.md`` names at least one defender telemetry
+    source (Sysmon, ETW or EDR) in its ``## 检测与缓解``
+    (detection & mitigation) section: the README positions every
+    detection section as telling a defender what can be observed
+    (behavioral traits, Sysmon/ETW/EDR telemetry), so a section
+    that names no telemetry source at all would leave a reader
+    with prose and no place to look. Check 9 only requires the
+    section to be non-empty.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -494,6 +502,34 @@ def check_reference_anchors_name_cve(entry_dir, errors):
             )
 
 
+def check_detection_section_names_telemetry(entry_dir, errors):
+    """Detection & mitigation must name a defender telemetry source.
+
+    The README positions every detection section as telling a
+    defender what can be observed (behavioral traits, Sysmon/ETW/
+    EDR telemetry), so a section naming no telemetry source would
+    leave a reader with prose and no place to look. Check 9 only
+    requires the section to be non-empty. At least one of Sysmon,
+    ETW or EDR (case-insensitive) must appear in ``## 检测与缓解``.
+    A missing section is already reported by ``check_analysis``
+    and is not double-reported here.
+    """
+    analysis = entry_dir / "analysis.md"
+    if not analysis.exists():
+        return
+    bodies = section_bodies(analysis.read_text(encoding="utf-8"))
+    detection = bodies.get("检测与缓解")
+    if detection is None:
+        return
+    if not re.search(r"sysmon|\betw\b|\bedr\b", detection, flags=re.I):
+        errors.append(
+            f"{entry_dir.name}: analysis.md names no defender "
+            "telemetry source (Sysmon / ETW / EDR) in "
+            "'## 检测与缓解' (the section must tell a defender "
+            "where to look)"
+        )
+
+
 def check_readme_index(entry_dirs, errors):
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     indexed = re.findall(r"\(analyses/(CVE-\d+-\d+)/analysis\.md\)", readme)
@@ -751,6 +787,7 @@ def main():
         check_reference_links(entry_dir, errors)
         check_reference_anchors(entry_dir, errors)
         check_reference_anchors_name_cve(entry_dir, errors)
+        check_detection_section_names_telemetry(entry_dir, errors)
         if check_poc_compiles(entry_dir, errors):
             compiled += 1
     check_readme_index(entry_dirs, errors)
@@ -780,7 +817,8 @@ def main():
         "content), standard metadata rows, PoC files and build commands, "
         f"{poc_build_note}, "
         "reference links anchored to the vendor advisory and the NVD "
-        "entry for the entry's own CVE, detection entries anchored "
+        "entry for the entry's own CVE, detection sections naming a "
+        "defender telemetry source, detection entries anchored "
         "to a published analysis, README indexes (including CWE classes) and "
         "Markdown links consistent, "
         "no duplicated top-level headings."

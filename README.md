@@ -48,7 +48,9 @@ below, in a table row naming the same CVE as the link it carries, the
 same CWE class(es) as the entry's metadata "漏洞类型" row, and the
 same driver file as the entry's metadata "受影响组件" row,
 every analysis carries the standard sections, each with
-content (not just a header), and a metadata
+content (not just a header) — and the detection & mitigation
+section naming at least one defender telemetry source (Sysmon /
+ETW / EDR) — and a metadata
 table naming its own CVE ID with the standard metadata rows filled
 in — the severity row naming a CVSS score in the 0.0–10.0 range (the
 "CVSS 3.1" version token alone does not count) and the fix-date row
