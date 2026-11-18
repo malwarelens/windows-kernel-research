@@ -64,7 +64,8 @@ is available — the PoC README naming its own CVE ID, and the
 standard PoC README sections
 (what it does / does not do, expected behaviour, build, run, risk
 notice), every `detection/` entry is listed once
-in that directory's index and links to at least one published analysis,
+in that directory's index, links to at least one published analysis,
+and names at least one defender telemetry source (Sysmon / ETW / EDR),
 every `kernel-notes/` entry is listed once
 in the supporting-notes list below, and every relative Markdown link
 resolves, and no Markdown file repeats a top-level heading.

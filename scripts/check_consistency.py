@@ -118,6 +118,13 @@ analysis entry cannot silently drift from the layout:
     that names no telemetry source at all would leave a reader
     with prose and no place to look. Check 9 only requires the
     section to be non-empty.
+21. Every ``detection/*.md`` entry (other than the directory's own
+    ``README.md``) names at least one defender telemetry source
+    (Sysmon, ETW or EDR): the detection directory's README
+    describes its entries as detection notes with "Sysmon / ETW /
+    EDR 可观测点", so an entry naming no telemetry source at all
+    would be generic advice with no place for a defender to look.
+    Check 19 only requires the entry to link to an analysis.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -530,6 +537,32 @@ def check_detection_section_names_telemetry(entry_dir, errors):
         )
 
 
+def check_detection_entries_name_telemetry(errors):
+    """Detection entries must name a defender telemetry source.
+
+    The detection directory's README describes its entries as
+    detection notes with "Sysmon / ETW / EDR 可观测点", so an
+    entry naming no telemetry source at all would be generic
+    advice with no place for a defender to look. Check 19 only
+    requires the entry to link to a published analysis. The
+    directory's own README.md is the index, not an entry, and is
+    excluded — same as check 19.
+    """
+    detection_dir = ROOT / "detection"
+    if not detection_dir.is_dir():
+        return
+    for entry_file in sorted(
+        p for p in detection_dir.glob("*.md") if p.name != "README.md"
+    ):
+        text = entry_file.read_text(encoding="utf-8")
+        if not re.search(r"sysmon|\betw\b|\bedr\b", text, flags=re.I):
+            errors.append(
+                f"detection/{entry_file.name}: names no defender "
+                "telemetry source (Sysmon / ETW / EDR) "
+                "(detection entries must tell a defender where to look)"
+            )
+
+
 def check_readme_index(entry_dirs, errors):
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     indexed = re.findall(r"\(analyses/(CVE-\d+-\d+)/analysis\.md\)", readme)
@@ -795,6 +828,7 @@ def main():
     check_readme_component_matches_metadata(entry_dirs, errors)
     detection_count = check_detection_index(errors)
     check_detection_entries_anchor_to_analysis(entry_dirs, errors)
+    check_detection_entries_name_telemetry(errors)
     notes_count = check_kernel_notes_index(errors)
     check_links(sorted(ROOT.rglob("*.md")), errors)
     check_duplicate_sections(sorted(ROOT.rglob("*.md")), errors)
@@ -819,7 +853,8 @@ def main():
         "reference links anchored to the vendor advisory and the NVD "
         "entry for the entry's own CVE, detection sections naming a "
         "defender telemetry source, detection entries anchored "
-        "to a published analysis, README indexes (including CWE classes) and "
+        "to a published analysis and naming a defender telemetry "
+        "source, README indexes (including CWE classes) and "
         "Markdown links consistent, "
         "no duplicated top-level headings."
     )
