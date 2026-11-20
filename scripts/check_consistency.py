@@ -125,6 +125,13 @@ analysis entry cannot silently drift from the layout:
     EDR 可观测点", so an entry naming no telemetry source at all
     would be generic advice with no place for a defender to look.
     Check 19 only requires the entry to link to an analysis.
+22. Every ``analysis.md`` names at least one affected Windows
+    version in its ``## 受影响版本`` (affected versions) section:
+    the section exists to list the affected versions (per the NVD
+    CPE list the entries cite), so a section that names no Windows
+    version at all would leave a reader with prose and no way to
+    tell whether their build is affected. Check 9 only requires
+    the section to be non-empty.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -537,6 +544,36 @@ def check_detection_section_names_telemetry(entry_dir, errors):
         )
 
 
+def check_affected_versions_name_windows(entry_dir, errors):
+    """Affected-versions section must name an affected Windows version.
+
+    The section exists to list the affected versions (per the NVD
+    CPE list the entries cite), so a section naming no Windows
+    version at all would leave a reader with prose and no way to
+    tell whether their build is affected. Check 9 only requires
+    the section to be non-empty. At least one "Windows 10",
+    "Windows 11" or "Windows Server" mention — or a concrete
+    build number such as 10.0.19044 — must appear in
+    ``## 受影响版本``. A missing section is already reported by
+    ``check_analysis`` and is not double-reported here.
+    """
+    analysis = entry_dir / "analysis.md"
+    if not analysis.exists():
+        return
+    bodies = section_bodies(analysis.read_text(encoding="utf-8"))
+    affected = bodies.get("受影响版本")
+    if affected is None:
+        return
+    if not re.search(
+        r"Windows\s+(10|11|Server)|10\.0\.\d+", affected, flags=re.I
+    ):
+        errors.append(
+            f"{entry_dir.name}: analysis.md names no affected "
+            "Windows version in '## 受影响版本' (the section must "
+            "list the affected Windows versions / builds)"
+        )
+
+
 def check_detection_entries_name_telemetry(errors):
     """Detection entries must name a defender telemetry source.
 
@@ -821,6 +858,7 @@ def main():
         check_reference_anchors(entry_dir, errors)
         check_reference_anchors_name_cve(entry_dir, errors)
         check_detection_section_names_telemetry(entry_dir, errors)
+        check_affected_versions_name_windows(entry_dir, errors)
         if check_poc_compiles(entry_dir, errors):
             compiled += 1
     check_readme_index(entry_dirs, errors)
@@ -852,7 +890,8 @@ def main():
         f"{poc_build_note}, "
         "reference links anchored to the vendor advisory and the NVD "
         "entry for the entry's own CVE, detection sections naming a "
-        "defender telemetry source, detection entries anchored "
+        "defender telemetry source, affected-versions sections naming "
+        "an affected Windows version, detection entries anchored "
         "to a published analysis and naming a defender telemetry "
         "source, README indexes (including CWE classes) and "
         "Markdown links consistent, "

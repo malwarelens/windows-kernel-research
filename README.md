@@ -50,7 +50,8 @@ same driver file as the entry's metadata "受影响组件" row,
 every analysis carries the standard sections, each with
 content (not just a header) — and the detection & mitigation
 section naming at least one defender telemetry source (Sysmon /
-ETW / EDR) — and a metadata
+ETW / EDR), and the affected-versions section naming at least
+one affected Windows version — and a metadata
 table naming its own CVE ID with the standard metadata rows filled
 in — the severity row naming a CVSS score in the 0.0–10.0 range (the
 "CVSS 3.1" version token alone does not count) and the fix-date row
