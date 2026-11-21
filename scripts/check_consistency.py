@@ -132,6 +132,16 @@ analysis entry cannot silently drift from the layout:
     version at all would leave a reader with prose and no way to
     tell whether their build is affected. Check 9 only requires
     the section to be non-empty.
+23. Every NVD vulnerability-detail link (``nvd.nist.gov/vuln/detail/``)
+    in an entry's ``## 参考来源`` (references) section names that
+    entry's own CVE ID: check 17 only requires at least one NVD link
+    to name the entry's CVE, so a second NVD link pasted from another
+    entry — the classic copy-paste slip when a new analysis is drafted
+    from an old one — would otherwise pass while sending a reader to
+    the wrong record. NVD detail URLs are per-CVE by construction, so
+    a detail link naming any other CVE is always wrong here; other
+    NVD URLs (e.g. a search page) are not record links and are left
+    alone.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -516,6 +526,52 @@ def check_reference_anchors_name_cve(entry_dir, errors):
             )
 
 
+def check_reference_nvd_links_name_cve(entry_dir, errors):
+    """Every NVD record link must name the entry's own CVE ID.
+
+    Check 17 only requires at least one nvd.nist.gov link to name
+    the entry's own CVE, so a second NVD link pasted from another
+    entry — the classic copy-paste slip when a new analysis is
+    drafted from an old one — would pass while sending a reader to
+    the wrong record. NVD vulnerability-detail URLs are per-CVE by
+    construction (``/vuln/detail/CVE-YYYY-NNNNN``), so every such
+    link in ``## 参考来源`` must carry this entry's own CVE ID
+    (case-insensitive). Other NVD URLs (e.g. a search page) are not
+    record links and are left alone. A missing references section
+    or no NVD link at all is already reported by checks 7 and 16
+    and is not double-reported here.
+    """
+    cve = entry_dir.name
+    analysis = entry_dir / "analysis.md"
+    if not analysis.exists():
+        return
+    sections = re.split(
+        r"^## ", analysis.read_text(encoding="utf-8"), flags=re.M
+    )
+    ref_section = next(
+        (s for s in sections if s.startswith("参考来源")), None
+    )
+    if ref_section is None:
+        return
+    urls = re.findall(
+        r"https?://([^/\s)]+)([^)\s]*)", ref_section, flags=re.I
+    )
+    cve_lower = cve.lower()
+    for host, path in urls:
+        if not (host.lower() == "nvd.nist.gov"
+                or host.lower().endswith(".nvd.nist.gov")):
+            continue
+        if not path.lower().startswith("/vuln/detail/"):
+            continue
+        if cve_lower not in (host + path).lower():
+            errors.append(
+                f"{cve}: analysis.md cites an NVD record for another "
+                f"CVE in '## 参考来源' "
+                f"({(host + path)[:60]}) — every NVD record link must "
+                f"name {cve}"
+            )
+
+
 def check_detection_section_names_telemetry(entry_dir, errors):
     """Detection & mitigation must name a defender telemetry source.
 
@@ -857,6 +913,7 @@ def main():
         check_reference_links(entry_dir, errors)
         check_reference_anchors(entry_dir, errors)
         check_reference_anchors_name_cve(entry_dir, errors)
+        check_reference_nvd_links_name_cve(entry_dir, errors)
         check_detection_section_names_telemetry(entry_dir, errors)
         check_affected_versions_name_windows(entry_dir, errors)
         if check_poc_compiles(entry_dir, errors):
@@ -889,7 +946,8 @@ def main():
         "content), standard metadata rows, PoC files and build commands, "
         f"{poc_build_note}, "
         "reference links anchored to the vendor advisory and the NVD "
-        "entry for the entry's own CVE, detection sections naming a "
+        "entry for the entry's own CVE, every NVD record link naming "
+        "the entry's own CVE, detection sections naming a "
         "defender telemetry source, affected-versions sections naming "
         "an affected Windows version, detection entries anchored "
         "to a published analysis and naming a defender telemetry "
