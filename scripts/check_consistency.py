@@ -142,6 +142,18 @@ analysis entry cannot silently drift from the layout:
     a detail link naming any other CVE is always wrong here; other
     NVD URLs (e.g. a search page) are not record links and are left
     alone.
+24. Every MSRC advisory link (``msrc.microsoft.com/update-guide/
+    vulnerability/`` or ``portal.msrc.microsoft.com/.../security-
+    guidance/advisory/``) in an entry's ``## 参考来源`` (references)
+    section names that entry's own CVE ID: check 17 only requires
+    at least one microsoft.com link to name the entry's CVE, so a
+    second advisory link pasted from another entry — the same
+    copy-paste slip check 23 closed for NVD record links — would
+    otherwise pass while sending a reader to the wrong advisory.
+    MSRC advisory URLs are per-CVE by construction, so an advisory
+    link naming any other CVE is always wrong here; other
+    microsoft.com URLs (e.g. a learn.microsoft.com driver doc) are
+    not advisory links and are left alone.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -572,6 +584,62 @@ def check_reference_nvd_links_name_cve(entry_dir, errors):
             )
 
 
+MSRC_ADVISORY_RE = re.compile(
+    r"/(?:update-guide/vulnerability|security-guidance/advisory)/"
+    r"(CVE-\d+-\d+)",
+    re.I,
+)
+
+
+def check_reference_msrc_links_name_cve(entry_dir, errors):
+    """Every MSRC advisory link must name the entry's own CVE ID.
+
+    Check 17 only requires at least one microsoft.com link to name
+    the entry's own CVE, so a second advisory link pasted from
+    another entry — the same copy-paste slip check 23 closed for
+    NVD record links — would pass while sending a reader to the
+    wrong advisory. MSRC advisory URLs are per-CVE by construction
+    (``/update-guide/vulnerability/CVE-YYYY-NNNNN`` and
+    ``/security-guidance/advisory/CVE-YYYY-NNNNN``), so every such
+    link in ``## 参考来源`` must carry this entry's own CVE ID
+    (case-insensitive). Other microsoft.com URLs (e.g. a
+    learn.microsoft.com driver doc) are not advisory links and are
+    left alone. A missing references section or no microsoft.com
+    link at all is already reported by checks 7 and 16 and is not
+    double-reported here.
+    """
+    cve = entry_dir.name
+    analysis = entry_dir / "analysis.md"
+    if not analysis.exists():
+        return
+    sections = re.split(
+        r"^## ", analysis.read_text(encoding="utf-8"), flags=re.M
+    )
+    ref_section = next(
+        (s for s in sections if s.startswith("参考来源")), None
+    )
+    if ref_section is None:
+        return
+    urls = re.findall(
+        r"https?://([^/\s)]+)([^)\s]*)", ref_section, flags=re.I
+    )
+    cve_lower = cve.lower()
+    for host, path in urls:
+        if not (host.lower() == "microsoft.com"
+                or host.lower().endswith(".microsoft.com")):
+            continue
+        advisory = MSRC_ADVISORY_RE.search(path)
+        if advisory is None:
+            continue
+        if advisory.group(1).lower() != cve_lower:
+            errors.append(
+                f"{cve}: analysis.md cites an MSRC advisory for "
+                f"another CVE in '## 参考来源' "
+                f"({(host + path)[:60]}) — every MSRC advisory link "
+                f"must name {cve}"
+            )
+
+
 def check_detection_section_names_telemetry(entry_dir, errors):
     """Detection & mitigation must name a defender telemetry source.
 
@@ -914,6 +982,7 @@ def main():
         check_reference_anchors(entry_dir, errors)
         check_reference_anchors_name_cve(entry_dir, errors)
         check_reference_nvd_links_name_cve(entry_dir, errors)
+        check_reference_msrc_links_name_cve(entry_dir, errors)
         check_detection_section_names_telemetry(entry_dir, errors)
         check_affected_versions_name_windows(entry_dir, errors)
         if check_poc_compiles(entry_dir, errors):
@@ -947,7 +1016,8 @@ def main():
         f"{poc_build_note}, "
         "reference links anchored to the vendor advisory and the NVD "
         "entry for the entry's own CVE, every NVD record link naming "
-        "the entry's own CVE, detection sections naming a "
+        "the entry's own CVE, every MSRC advisory link naming the "
+        "entry's own CVE, detection sections naming a "
         "defender telemetry source, affected-versions sections naming "
         "an affected Windows version, detection entries anchored "
         "to a published analysis and naming a defender telemetry "

@@ -59,7 +59,8 @@ naming a real calendar date — every analysis cites at least one
 external link in its references section, anchored to both the vendor
 advisory (microsoft.com) and the NVD entry (nvd.nist.gov) for its
 own CVE ID, with every NVD record link in the section naming that
-same CVE ID, every entry ships its PoC
+same CVE ID, and every MSRC advisory link in the section naming
+that same CVE ID, every entry ships its PoC
 README + trigger source with a documented mingw-w64 build command
 that names trigger.c — run against trigger.c whenever that compiler
 is available — the PoC README naming its own CVE ID, and the
