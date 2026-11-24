@@ -154,6 +154,14 @@ analysis entry cannot silently drift from the layout:
     link naming any other CVE is always wrong here; other
     microsoft.com URLs (e.g. a learn.microsoft.com driver doc) are
     not advisory links and are left alone.
+25. Every ``kernel-notes/*.md`` entry links to at least one
+    published analysis: the note describes itself as background for
+    this repository's vulnerability analyses, so a note naming no
+    analysis would be background disconnected from the repo — the
+    same rationale as check 19 for detection entries, applied to
+    the other supporting-notes directory. Only links to existing
+    entries count; a link to an analysis that does not exist is
+    already caught by check 4.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -925,6 +933,32 @@ def check_detection_entries_anchor_to_analysis(entry_dirs, errors):
             )
 
 
+def check_kernel_notes_anchor_to_analysis(entry_dirs, errors):
+    """Kernel notes must anchor to at least one published analysis.
+
+    The note describes itself as background for this repository's
+    vulnerability analyses, so a note linking to no analysis at
+    all would be background disconnected from the repo. Only links
+    to existing ``analyses/<CVE-ID>/analysis.md`` entries count; a
+    link to a missing analysis is already reported by check 4.
+    """
+    notes_dir = ROOT / "kernel-notes"
+    if not notes_dir.is_dir():
+        return
+    published = {d.name for d in entry_dirs}
+    for note_file in sorted(notes_dir.glob("*.md")):
+        text = note_file.read_text(encoding="utf-8")
+        linked = set(
+            re.findall(r"analyses/(CVE-\d+-\d+)/analysis\.md", text)
+        )
+        if not (linked & published):
+            errors.append(
+                f"kernel-notes/{note_file.name}: links to no published "
+                "analysis (kernel notes must anchor to at least "
+                "one analyses/<CVE-ID>/analysis.md)"
+            )
+
+
 def check_kernel_notes_index(errors):
     notes_dir = ROOT / "kernel-notes"
     if not notes_dir.is_dir():
@@ -994,6 +1028,7 @@ def main():
     check_detection_entries_anchor_to_analysis(entry_dirs, errors)
     check_detection_entries_name_telemetry(errors)
     notes_count = check_kernel_notes_index(errors)
+    check_kernel_notes_anchor_to_analysis(entry_dirs, errors)
     check_links(sorted(ROOT.rglob("*.md")), errors)
     check_duplicate_sections(sorted(ROOT.rglob("*.md")), errors)
 
@@ -1021,7 +1056,8 @@ def main():
         "defender telemetry source, affected-versions sections naming "
         "an affected Windows version, detection entries anchored "
         "to a published analysis and naming a defender telemetry "
-        "source, README indexes (including CWE classes) and "
+        "source, kernel notes anchored to a published analysis, "
+        "README indexes (including CWE classes) and "
         "Markdown links consistent, "
         "no duplicated top-level headings."
     )

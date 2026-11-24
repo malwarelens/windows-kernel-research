@@ -70,7 +70,8 @@ notice), every `detection/` entry is listed once
 in that directory's index, links to at least one published analysis,
 and names at least one defender telemetry source (Sysmon / ETW / EDR),
 every `kernel-notes/` entry is listed once
-in the supporting-notes list below, and every relative Markdown link
+in the supporting-notes list below and links to at least one published
+analysis, and every relative Markdown link
 resolves, and no Markdown file repeats a top-level heading.
 
 ```bash
