@@ -63,7 +63,11 @@ same CVE ID, and every MSRC advisory link in the section naming
 that same CVE ID, every entry ships its PoC
 README + trigger source with a documented mingw-w64 build command
 that names trigger.c — run against trigger.c whenever that compiler
-is available — the PoC README naming its own CVE ID, and the
+is available — the PoC README naming its own CVE ID, no trigger
+source using a weaponization primitive (token/privilege APIs,
+cross-process injection, or executable shellcode memory —
+comments and string literals excluded, so the header disclaimers
+do not trip it), and the
 standard PoC README sections
 (what it does / does not do, expected behaviour, build, run, risk
 notice), every `detection/` entry is listed once

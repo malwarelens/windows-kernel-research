@@ -162,6 +162,20 @@ analysis entry cannot silently drift from the layout:
     the other supporting-notes directory. Only links to existing
     entries count; a link to an analysis that does not exist is
     already caught by check 4.
+26. No ``poc/trigger.c`` uses a weaponization primitive: token or
+    privilege APIs (``OpenProcessToken``, ``AdjustTokenPrivileges``,
+    ``DuplicateToken``, ...), cross-process injection APIs
+    (``WriteProcessMemory``, ``CreateRemoteThread``,
+    ``VirtualAllocEx``, ...), or executable shellcode memory
+    (``PAGE_EXECUTE_*`` protection constants, a ``shellcode``
+    buffer). The README's hard rules forbid payload machinery — a
+    trigger only has to reach the vulnerable code path in its own
+    process — but nothing enforced that, so a snippet copied from
+    a public exploit could land in a trigger unnoticed. Comments
+    and string literals are stripped before scanning: every
+    trigger header disclaims these very primitives in prose ("no
+    token stealing ..."), and that disclaimer must not trip the
+    check it motivated.
 
 Usage:  python3 scripts/check_consistency.py
 Exit code 0 = all checks passed, 1 = at least one inconsistency.
@@ -428,6 +442,107 @@ def check_poc_compiles(entry_dir, errors):
         )
         return False
     return True
+
+
+# Weaponization primitives a verification-only trigger must never
+# use. Token/privilege manipulation, cross-process injection and
+# executable shellcode memory are the payload machinery the README's
+# hard rules forbid; a trigger only needs to reach the vulnerable
+# code path in its own process. Plain local allocation and
+# PAGE_READWRITE protection changes (used to hook a callback-table
+# slot in the trigger's own process) are deliberately not listed.
+BANNED_TRIGGER_PRIMITIVES = [
+    # Token / privilege manipulation.
+    "OpenProcessToken", "OpenThreadToken", "NtOpenProcessToken",
+    "NtOpenThreadToken", "AdjustTokenPrivileges",
+    "NtAdjustPrivilegesToken", "DuplicateToken", "DuplicateTokenEx",
+    "NtDuplicateToken", "SetThreadToken", "ImpersonateLoggedOnUser",
+    "ImpersonateSelf", "LookupPrivilegeValue", "LookupPrivilegeName",
+    "SeDebugPrivilege", "SeImpersonatePrivilege",
+    "SeAssignPrimaryTokenPrivilege", "SeTcbPrivilege",
+    "TOKEN_ADJUST_PRIVILEGES", "TOKEN_DUPLICATE", "TOKEN_IMPERSONATE",
+    "TOKEN_ALL_ACCESS",
+    # Cross-process injection.
+    "WriteProcessMemory", "ReadProcessMemory", "CreateRemoteThread",
+    "CreateRemoteThreadEx", "NtCreateThreadEx", "QueueUserAPC",
+    "VirtualAllocEx", "VirtualAllocExNuma", "NtAllocateVirtualMemory",
+    "NtWriteVirtualMemory", "NtReadVirtualMemory",
+    # Executable shellcode memory.
+    "shellcode", "PAGE_EXECUTE_READWRITE", "PAGE_EXECUTE_READ",
+    "PAGE_EXECUTE_WRITECOPY",
+]
+
+BANNED_TRIGGER_PRIMITIVE_RE = re.compile(
+    r"\b(" + "|".join(re.escape(p) for p in BANNED_TRIGGER_PRIMITIVES) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def strip_c_comments_and_strings(source):
+    """Return C source with comments and string/char literals removed.
+
+    Block comments, line comments and both kinds of literals are
+    blanked (not just deleted) so line numbers in the result still
+    match the original file. Only code may use a banned primitive,
+    so only code is scanned: the trigger headers disclaim these
+    very primitives in prose and printf strings may name them too.
+    """
+    out = []
+    i = 0
+    n = len(source)
+    while i < n:
+        two = source[i:i + 2]
+        if two == "/*":
+            end = source.find("*/", i + 2)
+            skipped = source[i:] if end == -1 else source[i:end + 2]
+            out.append("\n" * skipped.count("\n"))
+            i = n if end == -1 else end + 2
+        elif two == "//":
+            end = source.find("\n", i + 2)
+            i = n if end == -1 else end
+        elif source[i] in "\"'":
+            quote = source[i]
+            start = i
+            i += 1
+            while i < n:
+                if source[i] == "\\":
+                    i += 2
+                    continue
+                if source[i] == quote:
+                    i += 1
+                    break
+                if source[i] == "\n":
+                    break
+                i += 1
+            out.append("\n" * source[start:i].count("\n"))
+        else:
+            out.append(source[i])
+            i += 1
+    return "".join(out)
+
+
+def check_trigger_no_weaponization(entry_dir, errors):
+    """Check 26: the trigger source uses no weaponization primitive."""
+    cve = entry_dir.name
+    trigger = entry_dir / "poc" / "trigger.c"
+    if not trigger.exists():
+        return  # missing file is already reported by check_analysis
+    code = strip_c_comments_and_strings(
+        trigger.read_text(encoding="utf-8")
+    )
+    # One report per primitive (first use): a trigger calling the
+    # same banned API ten times is one mistake, not ten.
+    first_use = {}
+    for match in BANNED_TRIGGER_PRIMITIVE_RE.finditer(code):
+        key = match.group(0).lower()
+        if key not in first_use:
+            first_use[key] = code.count("\n", 0, match.start()) + 1
+    for primitive, line_no in sorted(first_use.items()):
+        errors.append(
+            f"{cve}: trigger.c uses banned weaponization primitive "
+            f"'{primitive}' (line {line_no}): verification-only "
+            "triggers must not build a payload"
+        )
 
 
 EXTERNAL_LINK_RE = re.compile(r"https?://", re.I)
@@ -1019,6 +1134,7 @@ def main():
         check_reference_msrc_links_name_cve(entry_dir, errors)
         check_detection_section_names_telemetry(entry_dir, errors)
         check_affected_versions_name_windows(entry_dir, errors)
+        check_trigger_no_weaponization(entry_dir, errors)
         if check_poc_compiles(entry_dir, errors):
             compiled += 1
     check_readme_index(entry_dirs, errors)
@@ -1059,7 +1175,8 @@ def main():
         "source, kernel notes anchored to a published analysis, "
         "README indexes (including CWE classes) and "
         "Markdown links consistent, "
-        "no duplicated top-level headings."
+        "no duplicated top-level headings, trigger sources "
+        "carrying no weaponization primitive."
     )
     return 0
 
