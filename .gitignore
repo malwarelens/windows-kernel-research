@@ -1,0 +1,5 @@
+# Python bytecode produced by running the repository self-check
+# (python3 scripts/check_consistency.py)
+__pycache__/
+*.py[cod]
+*$py.class
